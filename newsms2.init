@@ -1,0 +1,49 @@
+#!/bin/bash
+#
+# chkconfig: 345 99 01
+# description: newsms2 DynamicID SMS relay (registers with Check Point WatchDog)
+# processname: newsms2
+#
+### BEGIN INIT INFO
+# Provides:          newsms2
+# Required-Start:    $network $local_fs
+# Required-Stop:     $network $local_fs
+# Default-Start:     3 4 5
+# Default-Stop:      0 1 2 6
+# Short-Description: newsms2 boot hook - (re)registers NEWSMS2 with cpwd
+### END INIT INFO
+#
+# Installed by "newsms2 install". cpwd_admin registrations do not survive a reboot;
+# this hook waits for WatchDog and registers exactly one direct binary instance.
+
+[ -f /etc/profile.d/CP.sh ] && . /etc/profile.d/CP.sh
+
+NAME=NEWSMS2
+BIN=/opt/newsms2/newsms2
+
+row()   { cpwd_admin list 2>/dev/null | awk -v n="$NAME" '$1==n'; }
+alive() { row | awk '$2!=0 && $3=="E" {ok=1} END {exit !ok}'; }
+
+start() {
+  [ -x "$BIN" ] || { echo "$BIN missing"; return 1; }
+  for _ in $(seq 1 60); do cpwd_admin exist >/dev/null 2>&1 && break; sleep 5; done
+  cpwd_admin exist >/dev/null 2>&1 || { echo "WatchDog not running"; return 1; }
+  if alive; then echo "$NAME already running"; return 0; fi
+  # clear a stale (terminated) entry before registering again
+  [ -n "$(row)" ] && { cpwd_admin stop -name "$NAME" >/dev/null 2>&1; cpwd_admin del -name "$NAME" >/dev/null 2>&1; }
+  cpwd_admin start -name "$NAME" -path "$BIN" -command "newsms2 serve" -slp_timeout 5 -retry_limit u
+}
+
+stop() {
+  cpwd_admin stop -name "$NAME" >/dev/null 2>&1
+  cpwd_admin del -name "$NAME" >/dev/null 2>&1
+  return 0
+}
+
+case "${1:-}" in
+  start)   start ;;
+  stop)    stop ;;
+  restart) stop; sleep 2; start ;;
+  status)  row; alive ;;
+  *)       echo "Usage: $0 {start|stop|restart|status}"; exit 1 ;;
+esac
