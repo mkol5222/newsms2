@@ -16,28 +16,34 @@ flowchart LR
 - WatchDog restarts the process if it dies. A boot hook re-registers it after reboot.
 - Only loopback addresses are accepted. The password is never logged; usernames and phone numbers are masked.
 
-## Build
+## Download
 
-```sh
-make test
-make build      # dist/newsms2 — static linux/amd64
-make sha        # record the SHA-256 when you publish the binary
+The latest static linux/amd64 binary for Gaia is always at:
+
+```
+https://github.com/mkol5222/newsms2/releases/latest/download/newsms2
 ```
 
-## Dev loop (lab gateway)
+All versions and their SHA-256 checksums: [Releases](https://github.com/mkol5222/newsms2/releases). On the gateway, in expert mode:
 
 ```sh
-make test              # unit tests
-make upload            # build, then copy to /home/admin/newsms2 on the lab gateway
-make upload-install    # upload, install, check
-make upload-check      # check only
+cd $HOME
+curl_cli -fL --cacert $CPDIR/conf/ca-bundle.crt -o newsms2 \
+  https://github.com/mkol5222/newsms2/releases/latest/download/newsms2
+curl_cli -fL --cacert $CPDIR/conf/ca-bundle.crt -o newsms2.sha256 \
+  https://github.com/mkol5222/newsms2/releases/latest/download/newsms2.sha256
+sha256sum -c newsms2.sha256
+chmod +x newsms2
 ```
 
-Uses `../lab/scripts/lab.sh`: the admin password comes from the macOS Keychain and is never printed. Step-by-step internals: [NEWSMS2-IN-DETAIL.md](NEWSMS2-IN-DETAIL.md).
+`-L` follows GitHub's redirect to the download host. Leave certificate verification on (no `-k`). If the gateway has no direct internet access, add `--proxy http://<proxy>:<port>`, or download on a workstation and copy the file over with `scp`.
+
+Step-by-step internals: [NEWSMS2-IN-DETAIL.md](NEWSMS2-IN-DETAIL.md).
 
 ## Install (expert mode, as root)
 
 ```sh
+cd $HOME
 chmod +x ./newsms2
 ./newsms2 install
 ./newsms2 check
@@ -118,5 +124,26 @@ newsms2 check                      # cpwd, boot hook, handler, /health, test SMS
 newsms2 check -no-send             # skip the test SMS
 curl_cli -s http://127.0.0.1:60611/health
 ```
+
+## Appendix: build and dev loop
+
+Build from source (cross-compiles on any OS with Go):
+
+```sh
+make test
+make build      # dist/newsms2 — static linux/amd64 (CGO_ENABLED=0)
+make sha        # record the SHA-256 when you publish the binary
+```
+
+Dev loop against a lab gateway:
+
+```sh
+make test              # unit tests
+make upload            # build, then copy to /home/admin/newsms2 on the lab gateway
+make upload-install    # upload, install, check
+make upload-check      # check only
+```
+
+Uses `../lab/scripts/lab.sh`: the admin password comes from the macOS Keychain and is never printed.
 
 *Custom field code, not a Check Point product. Validate in a lab and re-check after every upgrade or Jumbo Take.*
